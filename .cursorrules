@@ -1,0 +1,105 @@
+Before diving into the best practices, please note that you may need to adapt the globs depending on your specific project structure.
+
+---
+name: react-best-practices.mdc
+description: Best practices for React component development and state management
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+- Use functional components with hooks for better performance and readability
+- Implement proper state management using Context API or external libraries like Redux
+- Utilize memoization with `useMemo` and `useCallback` to optimize re-renders
+- Follow the single responsibility principle for components
+- Use prop-types or TypeScript for type checking and better developer experience
+
+---
+name: typescript-best-practices.mdc
+description: TypeScript coding standards and type safety guidelines
+globs: **/*.{ts,tsx}
+---
+
+- Enable strict mode in tsconfig.json for enhanced type checking
+- Use interfaces for object shapes and types for utility types
+- Leverage type inference where possible, but provide explicit types for complex scenarios
+- Implement custom type guards for runtime type checking
+- Use readonly and const where appropriate to prevent unintended mutations
+
+---
+name: wxt-best-practices.mdc
+description: Best practices for developing browser extensions with WXT
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+- Organize your extension code into separate modules for content scripts, background scripts, and UI components
+- Use WXT's built-in environment variables for browser-specific configurations
+- Implement proper error handling and logging for background scripts
+- Utilize WXT's hot module replacement for faster development cycles
+- Follow WXT's recommended project structure for better maintainability
+
+---
+name: tailwind-best-practices.mdc
+description: Best practices for implementing Tailwind CSS in UI/UX design
+globs: **/*.{ts,tsx,css}
+---
+
+- Use utility-first approach for rapid development and consistent styling
+- Implement responsive design using Tailwind's responsive modifiers
+- Create custom components with Tailwind's `@apply` directive for reusability
+- Optimize CSS output by enabling purge mode in production
+- Follow accessibility guidelines by using semantic HTML and appropriate ARIA attributes
+
+---
+name: openai-api-best-practices.mdc
+description: Best practices for integrating and using the OpenAI API
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+- Implement proper error handling and rate limiting for API requests
+- Use streaming responses for better performance in long-running tasks
+- Cache API responses where appropriate to reduce costs and improve performance
+- Implement proper security measures for API keys and sensitive data
+- Follow OpenAI's usage guidelines and monitor your API usage
+
+---
+name: web-scraping-best-practices.mdc
+description: Best practices for web scraping and data extraction
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+- Respect robots.txt and website terms of service
+- Implement proper error handling and retries for robust scraping
+- Use headless browsers for dynamic content and JavaScript-heavy websites
+- Implement rate limiting and user-agent rotation to avoid being blocked
+- Store and process scraped data ethically and in compliance with data protection laws
+
+---
+name: reverse-image-search-best-practices.mdc
+description: Best practices for implementing reverse image search functionality
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+- Use efficient image processing libraries for feature extraction and comparison
+- Implement caching mechanisms for frequently searched images
+- Consider using multiple search engines or APIs for more comprehensive results
+- Implement proper error handling and fallback mechanisms
+- Ensure compliance with copyright and image usage policies
+
+
+This is project structure:
+
+shopbotext/
+├── .output/
+│   └── chrome-mv3/
+├── .wxt/
+├── assets/
+├── entrypoints/
+├── node_modules/
+├── public/
+├── .cursorrules
+├── .gitignore
+├── package-lock.json
+├── package.json
+├── README.md
+├── tsconfig.json
+└── wxt.config.ts
+

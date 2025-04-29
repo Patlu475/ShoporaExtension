@@ -1,0 +1,117 @@
+{
+  "timestamp": "2025-04-03 00:32:45",
+  "total_urls": 10,
+  "successful_extractions": 0,
+  "failed_extractions": 10,
+  "average_time": 0.0,
+  "average_completeness": 0.0,
+  "platform_results": {
+    "amazon": {
+      "total_urls": 2,
+      "successful_extractions": 0,
+      "failed_extractions": 2,
+      "average_time": 0.0,
+      "average_completeness": 0.0
+    },
+    "ebay": {
+      "total_urls": 2,
+      "successful_extractions": 0,
+      "failed_extractions": 2,
+      "average_time": 0.0,
+      "average_completeness": 0.0
+    },
+    "shopify": {
+      "total_urls": 2,
+      "successful_extractions": 0,
+      "failed_extractions": 2,
+      "average_time": 0.0,
+      "average_completeness": 0.0
+    },
+    "daraz": {
+      "total_urls": 2,
+      "successful_extractions": 0,
+      "failed_extractions": 2,
+      "average_time": 0.0,
+      "average_completeness": 0.0
+    },
+    "general": {
+      "total_urls": 2,
+      "successful_extractions": 0,
+      "failed_extractions": 2,
+      "average_time": 0.0,
+      "average_completeness": 0.0
+    }
+  },
+  "detailed_results": [
+    {
+      "url": "https://www.amazon.com/Apple-iPhone-13-128GB-Blue/dp/B09G9HD6PD",
+      "platform": "amazon",
+      "success": false,
+      "error": "BrowserConfig.__init__() got an unexpected keyword argument 'timeout'",
+      "time_taken": 0
+    },
+    {
+      "url": "https://www.amazon.com/Samsung-Factory-Unlocked-Smartphone-Processor/dp/B0BLP57HTL",
+      "platform": "amazon",
+      "success": false,
+      "error": "BrowserConfig.__init__() got an unexpected keyword argument 'timeout'",
+      "time_taken": 0
+    },
+    {
+      "url": "https://www.ebay.com/itm/144987270016",
+      "platform": "ebay",
+      "success": false,
+      "error": "BrowserConfig.__init__() got an unexpected keyword argument 'timeout'",
+      "time_taken": 0
+    },
+    {
+      "url": "https://www.ebay.com/itm/295254557055",
+      "platform": "ebay",
+      "success": false,
+      "error": "BrowserConfig.__init__() got an unexpected keyword argument 'timeout'",
+      "time_taken": 0
+    },
+    {
+      "url": "https://allbirds.com/products/mens-wool-runners",
+      "platform": "shopify",
+      "success": false,
+      "error": "BrowserConfig.__init__() got an unexpected keyword argument 'timeout'",
+      "time_taken": 0
+    },
+    {
+      "url": "https://rothys.com/products/the-flat-black-solid",
+      "platform": "shopify",
+      "success": false,
+      "error": "BrowserConfig.__init__() got an unexpected keyword argument 'timeout'",
+      "time_taken": 0
+    },
+    {
+      "url": "https://www.daraz.pk/products/samsung-galaxy-a04e-3gb64gb-i435350395-s1984413246.html",
+      "platform": "daraz",
+      "success": false,
+      "error": "BrowserConfig.__init__() got an unexpected keyword argument 'timeout'",
+      "time_taken": 0
+    },
+    {
+      "url": "https://www.daraz.pk/products/xiaomi-redmi-13c-4gb128gb-i499212341-s2280003767.html",
+      "platform": "daraz",
+      "success": false,
+      "error": "BrowserConfig.__init__() got an unexpected keyword argument 'timeout'",
+      "time_taken": 0
+    },
+    {
+      "url": "https://www.bestbuy.com/site/apple-iphone-14-pro-128gb-deep-purple-verizon/6505135.p",
+      "platform": "general",
+      "success": false,
+      "error": "BrowserConfig.__init__() got an unexpected keyword argument 'timeout'",
+      "time_taken": 0
+    },
+    {
+      "url": "https://www.target.com/p/apple-airpods-pro-2nd-generation/-/A-85978612",
+      "platform": "general",
+      "success": false,
+      "error": "BrowserConfig.__init__() got an unexpected keyword argument 'timeout'",
+      "time_taken": 0
+    }
+  ]
+}
