@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import browser from 'webextension-polyfill';
 import { ExtractionStrategy } from '../services/product-extractor';
 import { cn } from './utils/cn';
+import { toast } from 'react-hot-toast';
 
 // Components
 import Header from './components/Header';
@@ -15,12 +16,14 @@ import GridBeam from './components/GridBeam';
 import LoginPage from './components/auth/LoginPage';
 import SignUpPage from './components/auth/SignUpPage';
 import LoadingScreen from './components/LoadingScreen';
-import AnimatedDock from './components/AnimatedDock';
 import ProfilePage from './components/ProfilePage';
 import WishlistPage from './components/WishlistPage';
 import NotificationsPage from './components/NotificationsPage';
 import UserMenu from './components/UserMenu';
 import AuthUI from './components/AuthUI';
+import Navigation from './components/Navigation';
+import HomePage from './components/HomePage';
+import ProductDetailsPage from './components/ProductDetailsPage';
 
 // Types
 export interface Product {
@@ -41,6 +44,11 @@ export interface Product {
   last_updated?: string;
   rating?: string;
   reviews?: number;
+  reviews_list?: Array<{
+    username?: string;
+    review?: string;
+    rating?: string | number;
+  }>;
   link?: string;
   dateAdded?: number;
 }
@@ -50,6 +58,7 @@ interface ApiResponse {
   data?: Product | Product[] | any;
   error?: string;
   mockData?: boolean;
+  reviews?: number;
 }
 
 interface DebugMessage {
@@ -115,6 +124,9 @@ const App: React.FC = () => {
 
   // Add showAuthUI state
   const [showAuthUI, setShowAuthUI] = useState(false);
+
+  // Add selectedProduct state
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Logging function
   const log = (message: string, isError = false) => {
@@ -218,6 +230,7 @@ const App: React.FC = () => {
       last_updated: data.last_updated || '',
       rating: data.rating || '',
       reviews: data.reviews || 0,
+      reviews_list: data.reviews || data.reviews_list || [],
       link: data.link || data.url || '',
       dateAdded: data.dateAdded || Date.now()
     };
@@ -267,13 +280,20 @@ const App: React.FC = () => {
           dataToDisplay = dataToDisplay.data;
         }
         
+        // Add reviews to the data if they exist in the response
+        if (response.reviews) {
+          dataToDisplay.reviews = response.reviews;
+        }
+        
         const processedProducts = processProductData(dataToDisplay);
         
         // Check if we actually got products
         if (processedProducts.length > 0) {
           log(`Successfully processed ${processedProducts.length} products`);
+          // Directly set the first product as selected instead of showing results
+          setSelectedProduct(processedProducts[0]);
           setProducts(processedProducts);
-          setIsResultsVisible(true);
+          setIsResultsVisible(false);
           setIsStatusHidden(true);
         } else {
           log('No products were processed from the response', true);
@@ -604,24 +624,11 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // Handle navigation from the dock
-  const handleDockNavigation = (pageId: string) => {
-    switch (pageId) {
-      case 'home':
-        setActivePage('home');
-        break;
-      case 'wishlists':
-        setActivePage('wishlists');
-        break;
-      case 'notifications':
-        setActivePage('notifications');
-        break;
-      case 'profile':
-        setActivePage('profile');
-        break;
-      default:
-        setActivePage('home');
-    }
+  // Replace handleDockNavigation with handleNavigation
+  const handleNavigation = (page: ActivePage) => {
+    setActivePage(page);
+    setIsResultsVisible(false);
+    setIsDebugVisible(false);
   };
 
   // Add a function to handle showing the auth UI
@@ -633,6 +640,69 @@ const App: React.FC = () => {
   const handleAuthSuccess = () => {
     setShowAuthUI(false);
     // You might want to refresh data here if needed
+  };
+
+  // Update the renderProfilePage function
+  const renderProfilePage = () => {
+    if (!authUser) return null;
+    
+    return (
+      <ProfilePage
+        userData={{
+          name: authUser.name || '',
+          email: authUser.email || ''
+        }}
+        onLogout={handleLogout}
+      />
+    );
+  };
+
+  // Add handler for viewing product details
+  const handleViewProductDetails = (product: Product) => {
+    setSelectedProduct(product);
+  };
+
+  // Add handler for going back from product details
+  const handleBackFromDetails = () => {
+    setSelectedProduct(null);
+  };
+
+  // Add handler for buying product
+  const handleBuyNow = (product: Product) => {
+    if (product.url) {
+      browser.tabs.create({ url: product.url });
+    }
+  };
+
+  // Add handler for setting price alert
+  const handleSetPriceAlert = (product: Product) => {
+    // Show alert preferences modal or handle price alert setting
+    console.log('Setting price alert for:', product);
+  };
+
+  // Add handler for adding to wishlist
+  const handleAddToWishlist = async (product: Product) => {
+    try {
+      const response = await browser.runtime.sendMessage({
+        action: 'addToWishlist',
+        product: {
+          ...product,
+          id: product.id || product.url || Math.random().toString(36).substring(7)
+        }
+      }) as WishlistResponse;
+
+      if (response && response.success) {
+        toast.success('Product added to wishlist');
+        // Refresh wishlist data
+        fetchWishlistData();
+      } else {
+        const errorMsg = response?.error || 'Failed to add to wishlist';
+        toast.error(errorMsg);
+      }
+    } catch (error) {
+      console.error('Error adding to wishlist:', error);
+      toast.error('Error adding to wishlist');
+    }
   };
 
   // Loading screen while initializing
@@ -662,7 +732,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="w-full h-full">
+    <div className="flex flex-col h-[600px] w-[400px] bg-white">
       {isInitializing ? (
         <LoadingScreen message={loadingMessage} />
       ) : !isAuthenticated ? (
@@ -681,71 +751,47 @@ const App: React.FC = () => {
         )
       ) : (
         <>
-          {/* Only show header on home page */}
-          {activePage === 'home' && <Header />}
+          {/* Only show header on home page and when no product is selected */}
+          {activePage === 'home' && !selectedProduct && <Header />}
           
-          {/* Main content area - Only render the active page */}
-          <div className={`${activePage === 'home' ? 'h-[calc(100%-48px)]' : 'h-full'}`} style={{paddingBottom: activePage !== 'home' ? '64px' : '0'}}>
+          {/* Main content area */}
+          <div className={`${activePage === 'home' && !selectedProduct ? 'h-[calc(100%-48px)]' : 'h-full'} pb-16`}>
+            {/* Product Details Page */}
+            {selectedProduct ? (
+              <ProductDetailsPage
+                product={selectedProduct}
+                onBack={handleBackFromDetails}
+                onBuyNow={handleBuyNow}
+                onAddToWishlist={handleAddToWishlist}
+                onSetPriceAlert={handleSetPriceAlert}
+              />
+            ) : (
+              <>
             {/* Home Page */}
             {activePage === 'home' && (
-              <main className="w-full h-full transition-all duration-300 ease-in-out pb-16">
-                {/* Content container */}
-                <div className="h-full p-0">
-                  {!isResultsVisible ? (
-                    <GridBeam className="h-[550px] flex flex-col items-center justify-center pt-14">
-                      <div className="text-center mb-6 mt-6 px-8">
-                        <h1 className="text-xl font-bold text-blue-500 mb-1">Welcome to ShopBot</h1>
-                        <p className="text-gray-600 text-sm max-w-xs mx-auto">
-                          Compare prices, find deals, and discover similar products across the web.
-                        </p>
-                      </div>
-                      
-                      <div className="flex justify-center items-center mt-2">
-                        <ScanButton 
-                          onClick={scanCurrentPage}
+                  <HomePage
                           isLoading={isLoading}
-                          setIsLoading={setIsLoading}
-                          onExtracted={processProductData}
-                          strategy={extractionStrategy}
-                          setStrategy={setExtractionStrategy}
-                        />
-                      </div>
-                    </GridBeam>
-                  ) : (
-                    <GridBeam className="pt-16 px-4 pb-4 overflow-y-auto h-[600px]">
-                      <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-lg font-semibold text-gray-800">Product Results</h2>
-                        <button 
-                          onClick={() => {
+                    isResultsVisible={isResultsVisible}
+                    products={products}
+                    extractionStrategy={extractionStrategy}
+                    onScan={scanCurrentPage}
+                    onClearResults={() => {
                             setIsResultsVisible(false);
                             setProducts([]);
                           }}
-                          className="text-xs text-gray-500 hover:text-gray-700 flex items-center"
-                        >
-                          <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                          </svg>
-                          Clear Results
-                        </button>
-                      </div>
-                      
-                      <ProductList 
-                        products={products}
-                        isVisible={true}
-                        isLoading={isLoading}
+                    onStrategyChange={setExtractionStrategy}
+                    onViewProductDetails={handleViewProductDetails}
                       />
-                    </GridBeam>
-                  )}
-                </div>
-              </main>
             )}
             
             {/* Wishlist Page */}
             {activePage === 'wishlists' && (
               <WishlistPage 
-                wishlistProducts={wishlistProducts}
-                isLoading={isWishlistLoading}
-                onRefresh={fetchWishlistData}
+                    propWishlistProducts={wishlistProducts.map(product => ({
+                      ...product,
+                      id: product.id || product.url || Math.random().toString(36).substring(7)
+                    }))}
+                    onViewProductDetails={handleViewProductDetails}
               />
             )}
             
@@ -759,26 +805,22 @@ const App: React.FC = () => {
               <ProfilePage 
                 userData={{
                   name: authUser.name || '',
-                  email: authUser.email || '',
-                  title: 'Premium Member',
-                  avatar: `data:image/svg+xml,${encodeURIComponent(`<svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                      <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style="stop-color:${['#FF6B6B', '#4ECDC4', '#45B7D1', '#96C93D', '#E056FD'][Math.floor(Math.random() * 5)]};stop-opacity:1" />
-                        <stop offset="100%" style="stop-color:${['#845EC2', '#FF9671', '#F9F871', '#2C73D2', '#008F7A'][Math.floor(Math.random() * 5)]};stop-opacity:1" />
-                      </linearGradient>
-                    </defs>
-                    <rect width="80" height="80" fill="url(#gradient)"/>
-                    <text x="50%" y="50%" dy=".1em" fill="white" text-anchor="middle" dominant-baseline="middle" font-size="28" font-family="system-ui">${(authUser.name || '').split(' ').map(n => n[0]).join('').toUpperCase()}</text>
-                  </svg>`)}`
+                      email: authUser.email || ''
                 }}
                 onLogout={handleLogout}
               />
+                )}
+              </>
             )}
           </div>
           
-          {/* Dock Navigation always visible */}
-          <AnimatedDock onNavigate={handleDockNavigation} />
+          {/* Navigation - Only show when no product is selected */}
+          {!selectedProduct && (
+          <Navigation 
+            activePage={activePage} 
+            onNavigate={handleNavigation} 
+          />
+          )}
           
           {/* Debug Panel */}
           {isDebugVisible && (

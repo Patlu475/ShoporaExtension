@@ -1,6 +1,4 @@
-"use client"
-
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from 'react'
 import { ArrowRight, Check, ChevronDown, ChevronUp, ExternalLink, Heart, Info, Loader2, Scan, X, Search, Sparkles } from "lucide-react"
 import { Button } from "@/entrypoints/popup/components/ui/button"
 import { Card, CardContent } from "@/entrypoints/popup/components/ui/card"

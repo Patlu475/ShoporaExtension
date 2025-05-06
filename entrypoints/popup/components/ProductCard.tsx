@@ -6,6 +6,8 @@ import { SimilarProduct } from './ExpandableCard';
 import { Product } from '../App'; // Import Product interface from App
 import { cn } from '../lib/utils';
 import AlertPreferencesModal from './AlertPreferencesModal';
+import { Button } from './ui/button';
+import { ShoppingBag, Heart, Clock, Star } from 'lucide-react';
 
 // Lazy load the ExpandableCard component
 const ExpandableCard = lazy(() => import('./ExpandableCard'));
@@ -28,6 +30,8 @@ interface ProductCardProps {
   index?: number;
   hideSimilarProducts?: boolean;
   isWishlist?: boolean;
+  onBuyNow?: (product: Product) => void;
+  onAddToWishlist?: (product: Product) => void;
 }
 
 // Define interface for the response from background script
@@ -108,23 +112,14 @@ if (typeof document !== 'undefined') {
 }
 
 // Memoize the product card for better performance
-const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hideSimilarProducts = false, isWishlist = false }) => {
-  // Extract properties with fallbacks for all possible undefined values
-  const { 
-    title = 'Untitled Product', 
-    description = '', 
-    price = 'N/A', 
-    image = '', 
-    website = '', 
-    availability = '', 
-    category = '',
-    brand = '',
-    sku = '',
-    rating = '',
-    reviews = 0,
-    url = ''
-  } = product || {};
-  
+const ProductCard: React.FC<ProductCardProps> = memo(({ 
+  product, 
+  index = 0, 
+  hideSimilarProducts = false, 
+  isWishlist = false, 
+  onBuyNow, 
+  onAddToWishlist 
+}) => {
   const [isSearching, setIsSearching] = useState(false);
   const [similarProducts, setSimilarProducts] = useState<SimilarProduct[]>([]);
   const [showSimilarProducts, setShowSimilarProducts] = useState(false);
@@ -137,18 +132,18 @@ const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hide
 
   // Memoize the search query to prevent recreating it on every render
   const searchQuery = useMemo(() => {
-    let query = title;
+    let query = product.title;
     
-    if (brand && !title.toLowerCase().includes(brand.toLowerCase())) {
-      query = `${brand} ${query}`;
+    if (product.brand && !query.toLowerCase().includes(product.brand.toLowerCase())) {
+      query = `${product.brand} ${query}`;
     }
     
-    if (category && !query.toLowerCase().includes(category.toLowerCase())) {
-      query = `${query} ${category}`;
+    if (product.category && !query.toLowerCase().includes(product.category.toLowerCase())) {
+      query = `${query} ${product.category}`;
     }
     
     return query;
-  }, [title, brand, category]);
+  }, [product.title, product.brand, product.category]);
 
   // Use memoized function for searching similar products
   const handleSearchSimilar = useCallback(async () => {
@@ -165,12 +160,12 @@ const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hide
         action: 'searchSimilarProducts',
         product: {
           title: searchQuery, // Use the enhanced search query as title
-          description: description || '',
-          price: price || '',
-          image: image || '',
-          website: website || '',
-          category: category || '',
-          brand: brand || ''
+          description: product.description || '',
+          price: product.price || '',
+          image: product.image || '',
+          website: product.website || '',
+          category: product.category || '',
+          brand: product.brand || ''
         },
         maxResults: 5
       }) as SearchResponse;
@@ -197,7 +192,7 @@ const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hide
     } finally {
       setIsSearching(false);
     }
-  }, [searchQuery, description, price, image, website, isSearching, brand, category]);
+  }, [searchQuery, product.description, product.price, product.image, product.website, isSearching, product.brand, product.category]);
 
   // Use memoized function for toggling similar products
   const toggleSimilarProducts = useCallback(() => {
@@ -217,8 +212,8 @@ const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hide
 
   // Memoize the availability class
   const availabilityClass = useMemo(() => 
-    getAvailabilityClass(availability || ''),
-    [availability]
+    getAvailabilityClass(product.availability || ''),
+    [product.availability]
   );
 
   // Memoize the loading state for button
@@ -247,8 +242,8 @@ const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hide
   }, []);
 
   const imageSrc = useMemo(() => 
-    image || 'https://via.placeholder.com/150?text=No+Image',
-    [image]
+    product.image || 'https://via.placeholder.com/150?text=No+Image',
+    [product.image]
   );
 
   // Memoize the fallback for Suspense to prevent recreation
@@ -288,13 +283,13 @@ const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hide
     try {
       // Create product object with all necessary data
       const wishlistProduct = {
-        title,
-        description,
-        price,
+        title: product.title,
+        description: product.description,
+        price: product.price,
         image: imageSrc,
-        website,
-        availability,
-        category,
+        website: product.website,
+        availability: product.availability,
+        category: product.category,
         url: product.url || window.location.href,
         target // Add the target for alerts
       };
@@ -325,7 +320,7 @@ const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hide
       
       // Check if response was successful
       if (response && response.success) {
-        toast.success(`${title} added to wishlist!`, { id: toastId });
+        toast.success(`${product.title} added to wishlist!`, { id: toastId });
       } else {
         // If there was an error, show error toast and reset state
         const errorMsg = response?.error || 'Failed to add to wishlist';
@@ -337,21 +332,28 @@ const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hide
       toast.error('Error adding to wishlist', { id: toastId });
       setAddedToWishlist(false);
     }
-  }, [product, title, description, price, imageSrc, website, availability, category]);
+  }, [product, imageSrc, product.title, product.description, product.price, product.website, product.availability, product.category, product.url]);
 
   // Function to handle wishlist button click
   const handleWishlistClick = useCallback(() => {
     // Check if product is available
-    const available = availability?.toLowerCase().includes('in stock') || false;
+    const available = product.availability?.toLowerCase().includes('in stock') || false;
     setIsAvailable(available);
     setShowAlertModal(true);
-  }, [availability]);
+  }, [product.availability]);
 
   // Function to handle alert preferences confirmation
   const handleAlertConfirm = useCallback((target: string) => {
     setShowAlertModal(false);
-    addToWishlist(target);
-  }, [addToWishlist]);
+    // Add to wishlist with the target
+    const productWithTarget = {
+      ...product,
+      target
+    };
+    if (onAddToWishlist) {
+      onAddToWishlist(productWithTarget);
+    }
+  }, [product, onAddToWishlist]);
 
   return (
     <div className="flex flex-col">
@@ -441,16 +443,16 @@ const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hide
           <div className="mt-1 mb-2">
             <div className="flex items-center mb-1">
               <span className="text-xs font-medium text-gray-900">Reviews</span>
-              {rating && (
+              {product.rating && (
                 <div className="flex items-center ml-2">
                   <div className="flex items-center">
-                    <StarIcon />
-                    <span className="text-xs font-medium text-amber-500">{rating}</span>
+                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                    <span className="text-xs font-medium text-amber-500">{product.rating}</span>
                   </div>
                 </div>
               )}
-              {typeof reviews === 'number' && reviews > 0 && (
-                <span className="text-[10px] text-gray-500 ml-1">({reviews})</span>
+              {typeof product.reviews === 'number' && product.reviews > 0 && (
+                <span className="text-[10px] text-gray-500 ml-1">({product.reviews})</span>
               )}
             </div>
             <div className="overflow-y-auto max-h-[120px] pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-gray-50">
@@ -462,7 +464,7 @@ const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hide
                     </span>
                     {review.rating && (
                       <div className="flex items-center">
-                        <StarIcon />
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                         <span className="text-[10px] text-amber-500">{review.rating}</span>
                       </div>
                     )}
@@ -485,26 +487,33 @@ const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hide
           </div>
         )}
 
-        {/* Add to Wishlist notification that appears on hover */}
-        {!isWishlist && (
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-blue-500 to-blue-400 text-white p-2 rounded-b-lg transform translate-y-full opacity-0 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 cursor-pointer flex items-center justify-center"
-               onClick={handleWishlistClick}>
-            {addedToWishlist ? (
-              <div className="flex items-center">
-                <svg className="w-5 h-5 animate-check" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-            ) : (
-              <>
-                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-                <span className="text-xs font-medium">Add to Wishlist</span>
-              </>
-            )}
-          </div>
-        )}
+        {/* Actions */}
+        <div className="mt-3 flex gap-2">
+          <Button 
+            className="flex-1 bg-gradient-to-r from-teal-500 to-sky-500 hover:from-teal-600 hover:to-sky-600 h-8 text-sm"
+            onClick={() => onBuyNow?.(product)}
+          >
+            <ShoppingBag className="h-3 w-3 mr-1" />
+            Buy Now
+          </Button>
+          <Button 
+            variant="outline" 
+            className="flex-1 h-8 text-sm"
+            onClick={handleWishlistClick}
+          >
+            Add to Wishlist
+            <Heart className="h-3 w-3 ml-1" />
+          </Button>
+        </div>
+
+        <Button
+          variant="secondary"
+          className="mt-2 w-full flex items-center justify-center h-8 text-sm"
+          onClick={handleWishlistClick}
+        >
+          <Clock className="h-3 w-3 mr-1" />
+          Set Price Alert
+        </Button>
       </div>
 
       {/* Confetti Icon (Similar Products) - Now positioned outside the card */}
@@ -551,14 +560,16 @@ const ProductCard: React.FC<ProductCardProps> = memo(({ product, index = 0, hide
       )}
 
       {/* Alert Preferences Modal */}
-      <AlertPreferencesModal
-        isOpen={showAlertModal}
-        onClose={() => setShowAlertModal(false)}
-        onConfirm={handleAlertConfirm}
-        productTitle={title}
-        isAvailable={isAvailable}
-        currentPrice={price}
-      />
+      {showAlertModal && (
+        <AlertPreferencesModal
+          isOpen={showAlertModal}
+          onClose={() => setShowAlertModal(false)}
+          onConfirm={handleAlertConfirm}
+          productTitle={product.title}
+          isAvailable={isAvailable}
+          currentPrice={product.price}
+        />
+      )}
     </div>
   );
 });

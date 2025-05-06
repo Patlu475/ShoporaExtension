@@ -24,7 +24,7 @@ def extract_featured_product(url, include_alternatives=False):
     api_endpoint = "https://api.agentql.com/v1/query-data"
     
     # Your AgentQL API key - first try environment variable, then use default
-    api_key = os.environ.get("AGENTQL_API_KEY", "D_2xqurEjZrkiIKYLWx8qPAt_jeksI-QyYZdjYDUFaUcJEWmJQt1hQ")
+    api_key = os.environ.get("AGENTQL_API_KEY", "-2Yz8aRMF-pDLbboFivUcj9pu0gtz6RIaAW17AAwDT6Nbu10Ai-4tw")
     
     # Headers for the request
     headers = {

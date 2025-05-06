@@ -26,7 +26,7 @@ SERPAPI_KEY = os.environ.get("SERPAPI_KEY", "")
 if not SERPAPI_KEY:
     print("WARNING: SERPAPI_KEY is not set in .env file. The similar products feature may not work properly.")
 
-AGENTQL_API_KEY = os.environ.get("AGENTQL_API_KEY", "D_2xqurEjZrkiIKYLWx8qPAt_jeksI-QyYZdjYDUFaUcJEWmJQt1hQ")
+AGENTQL_API_KEY = os.environ.get("AGENTQL_API_KEY", "-2Yz8aRMF-pDLbboFivUcj9pu0gtz6RIaAW17AAwDT6Nbu10Ai-4tw")
 
 # Initialize services
 serpapi_service = SerpAPIService(SERPAPI_KEY)
