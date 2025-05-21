@@ -86,25 +86,77 @@ class SerpAPIService:
         
         # Extract important keywords from title
         if title:
-            # Filter out short words and common words
-            stop_words = ['the', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'with', 'by', 'of', 'a', 'an']
-            title_words = [word for word in title.split() 
-                          if len(word) > 2 and word.lower() not in stop_words]
+            # Enhanced stop words list with more common words to filter out
+            stop_words = ['the', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'with', 'by', 'of', 'a', 'an', 
+                         'this', 'that', 'these', 'those', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+                         'have', 'has', 'had', 'do', 'does', 'did', 'but', 'if', 'because', 'as', 'until',
+                         'while', 'from', 'after', 'before', 'above', 'below', 'between', 'under', 'over']
             
-            # Add up to 3 meaningful words from title
-            search_terms.extend(title_words[:3])
+            # Remove common product prefixes/suffixes that don't add specificity
+            clean_title = re.sub(r'(newest|latest|best|premium|upgraded|professional|official|authentic|original|high quality|improved)\s+', '', title, flags=re.IGNORECASE)
+            clean_title = re.sub(r'\s+(version|model|edition|series|collection|bundle|pack|set)', '', clean_title, flags=re.IGNORECASE)
+            
+            # Split the title and filter out non-meaningful words
+            title_words = []
+            for word in clean_title.split():
+                # Clean the word of punctuation
+                word = re.sub(r'[^\w\s]', '', word)
+                
+                # Only keep words that are not stop words, have more than 2 characters, 
+                # and don't consist of only numbers
+                if (len(word) > 2 and 
+                    word.lower() not in stop_words and 
+                    not re.match(r'^\d+$', word)):
+                    title_words.append(word)
+            
+            # Extract model numbers or specific identifiers (alphanumeric combinations)
+            model_numbers = re.findall(r'\b[A-Za-z0-9]+-?[A-Za-z0-9]+\b', title)
+            for model in model_numbers:
+                if len(model) >= 4 and not model.lower() in stop_words:  # Only substantial model numbers
+                    if model not in title_words:
+                        title_words.append(model)
+            
+            # Identify key product attributes - size, color, material, etc.
+            size_match = re.search(r'\b(\d+(\.\d+)?)\s*(inch|in|cm|mm|ft|foot|feet|meter|m|"|\')\b', title, re.IGNORECASE)
+            if size_match:
+                size_term = size_match.group(0)
+                if size_term not in title_words:
+                    title_words.append(size_term)
+            
+            # Add up to 4 meaningful words from title (increased from 3)
+            search_terms.extend(title_words[:4])
         
-        # Add SKU if available
-        if sku:
+        # Add SKU if it looks like a model number (not just a generic SKU)
+        if sku and re.search(r'[A-Za-z]', sku) and len(sku) > 3:  # Contains letters and is substantial
             search_terms.append(sku)
         
-        # Add category if available
-        if category:
-            search_terms.append(category)
+        # Add category if available and specific enough
+        if category and len(category) > 3 and category.lower() not in stop_words:
+            # Don't add generic categories
+            generic_categories = ['product', 'item', 'goods', 'misc', 'other', 'general']
+            if not any(gc in category.lower() for gc in generic_categories):
+                search_terms.append(category)
+        
+        # Add exact product type if we can determine it
+        product_type_match = None
+        if title:
+            # Look for common product types that might be more specific than category
+            product_types = [
+                'monitor', 'keyboard', 'mouse', 'laptop', 'smartphone', 'tablet', 'headphones',
+                'earbuds', 'speaker', 'camera', 'printer', 'router', 'watch', 'tv', 'television',
+                'refrigerator', 'microwave', 'vacuum', 'blender', 'toaster', 'kettle'
+            ]
+            for pt in product_types:
+                if re.search(r'\b' + pt + r'\b', title.lower()):
+                    product_type_match = pt
+                    break
+        
+        if product_type_match and product_type_match not in search_terms:
+            search_terms.append(product_type_match)
         
         # Add price range indicator if price is available
         if price:
-            # Extract numeric value from price
+            # Improved price extraction
             price_value = re.search(r'[\d,.]+', price)
             if price_value:
                 try:
@@ -113,8 +165,8 @@ class SerpAPIService:
                     min_price = max(0, numeric_price * 0.8)  # 20% below
                     max_price = numeric_price * 1.2  # 20% above
                     
-                    # Add price range indicator
-                    search_terms.append(f"price {min_price:.0f}-{max_price:.0f}")
+                    # Add price range indicator with more specific format
+                    search_terms.append(f"price:{min_price:.0f}-{max_price:.0f}")
                 except ValueError:
                     pass  # Skip if conversion fails
         

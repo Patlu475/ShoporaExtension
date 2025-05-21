@@ -2054,7 +2054,7 @@ async function injectProductScanner() {
                   
                   // Add alert preferences to product details
                   if (options.alertOnStock) {
-                    (productDetails as any).target = 'available';
+                    (productDetails as any).target = 'availability';
                   } else if (options.priceLimit) {
                     (productDetails as any).target = `limit:${options.priceLimit}`;
                   }

@@ -7,6 +7,7 @@ import { Card, CardContent } from './ui/card';
 import { Separator } from './ui/separator';
 import { Product } from '../App';
 import AlertPreferencesModal from './AlertPreferencesModal';
+import { AIService } from '../../services/ai_service';
 
 interface SerpApiResponse {
   success: boolean;
@@ -47,6 +48,13 @@ interface ProductDetailsPageProps {
   onSetPriceAlert: (product: Product) => void;
 }
 
+interface GPT41Recommendation {
+  title: string;
+  website: string;
+  price: string;
+  explanation: string;
+}
+
 const ProductDetailsPage: React.FC<ProductDetailsPageProps> = ({
   product,
   onBack,
@@ -64,6 +72,8 @@ const ProductDetailsPage: React.FC<ProductDetailsPageProps> = ({
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [isAvailable, setIsAvailable] = useState(false);
   const [tempProduct, setTempProduct] = useState<Product | null>(null);
+  const [gptRecommendation, setGptRecommendation] = useState<GPT41Recommendation | null>(null);
+  const [isRecommendationExpanded, setIsRecommendationExpanded] = useState(false);
 
   useEffect(() => {
     const fetchSimilarProducts = async () => {
@@ -138,6 +148,94 @@ const ProductDetailsPage: React.FC<ProductDetailsPageProps> = ({
         });
 
         setProductDetails(details);
+        
+        // Create JSON objects for console logging
+        const formattedProducts = validProducts.map((product, index) => {
+          const productData = responses[index]?.data || {} as any;
+          const productReviews = responses[index]?.reviews || [];
+          
+          return {
+            title: productData.title || product.title || '',
+            description: productData.description || product.description || '',
+            price: productData.price || product.price || '',
+            image: productData.image || product.image || '',
+            website: productData.website || product.website || '',
+            original_price: productData.original_price || (product as any).original_price || '',
+            discount_percentage: productData.discount_percentage || (product as any).discount_percentage || '',
+            currency: productData.currency || (product as any).currency || '',
+            availability: productData.availability || product.availability || '',
+            rating: productData.rating || product.rating || '',
+            review_count: productData.review_count || (product as any).review_count || '',
+            sku: productData.sku || product.sku || '',
+            brand: productData.brand || product.brand || '',
+            top_customer_reviews: productReviews.map(review => ({
+              username: review.username || 'Anonymous',
+              review: review.review || '',
+              rating: review.rating || 0
+            }))
+          };
+        });
+        
+        // Add the current product to the formatted products array
+        const currentProductFormatted = {
+          title: product.title || '',
+          description: product.description || '',
+          price: product.price || '',
+          image: product.image || '',
+          website: product.website || '',
+          original_price: (product as any).original_price || '',
+          discount_percentage: (product as any).discount_percentage || '',
+          currency: (product as any).currency || '',
+          availability: product.availability || '',
+          rating: product.rating || '',
+          review_count: (product as any).review_count || '',
+          sku: product.sku || '',
+          brand: product.brand || '',
+          top_customer_reviews: Array.isArray(product.reviews) 
+            ? (product.reviews as any[]).map(review => ({
+                username: review.username || 'Anonymous',
+                review: review.review || '',
+                rating: review.rating || 0
+              }))
+            : []
+        };
+        
+        // Add the current product at the beginning of the array
+        const allProducts = [currentProductFormatted, ...formattedProducts];
+        
+        // Log the complete product data as a JSON string
+        console.log('All product data:');
+        console.log(JSON.stringify(allProducts, null, 2));
+        
+        // Pass the formatted product data to GPT-4.1 and log the response
+        const aiService = new AIService();
+        try {
+          const gptResponse = await aiService.askGPT41(JSON.stringify(allProducts));
+          console.log('GPT-4.1 Recommendation:');
+          console.log(gptResponse);
+          
+          // Parse the GPT-4.1 response to extract recommendation details
+          try {
+            const titleMatch = gptResponse.match(/\*\*Title:\*\*\s*(.*?)(?:\s*\n|\s*\*\*Website)/i);
+            const websiteMatch = gptResponse.match(/\*\*Website:\*\*\s*(.*?)(?:\s*\n|\s*\*\*Final)/i);
+            const priceMatch = gptResponse.match(/\*\*Final Price:\*\*\s*(.*?)(?:\s*\n|\s*\*\*Explanation)/i);
+            const explanationMatch = gptResponse.match(/\*\*Explanation:\*\*\s*([\s\S]*?)(?:\s*$)/i);
+            
+            if (titleMatch && websiteMatch && priceMatch && explanationMatch) {
+              setGptRecommendation({
+                title: titleMatch[1].trim(),
+                website: websiteMatch[1].trim(),
+                price: priceMatch[1].trim(),
+                explanation: explanationMatch[1].trim()
+              });
+            }
+          } catch (parseError) {
+            console.error('Error parsing GPT-4.1 recommendation:', parseError);
+          }
+        } catch (aiError) {
+          console.error('Error getting GPT-4.1 recommendation:', aiError);
+        }
+        
       } catch (error) {
         console.error('Error prefetching product details:', error);
       }
@@ -151,18 +249,24 @@ const ProductDetailsPage: React.FC<ProductDetailsPageProps> = ({
   };
 
   // Format price with proper currency symbol
-  const formatPrice = (price: string | number) => {
+  const formatPrice = (price: string | number, currency?: string) => {
     if (typeof price === 'string') {
+      // Check if price already includes a currency symbol
       if (price.includes('$') || price.includes('€') || price.includes('£')) {
         return price;
       }
       const numericPrice = parseFloat(price);
       if (!isNaN(numericPrice)) {
-        return `$${numericPrice.toFixed(2)}`;
+        // Display the currency code if available, otherwise use USD
+        const currencyCode = currency || 'USD';
+        return `${currencyCode} ${numericPrice.toFixed(2)} `;
       }
       return price;
     }
-    return `$${price.toFixed(2)}`;
+    
+    // For numeric prices, use the currency code
+    const currencyCode = currency || 'USD';
+    return `${price.toFixed(2)} ${currencyCode}`;
   };
 
   // Determine availability status
@@ -255,11 +359,37 @@ const ProductDetailsPage: React.FC<ProductDetailsPageProps> = ({
           {/* Product Info */}
           <div className="p-3">
             <div className="flex gap-1 mb-2">
-              {[...Array(4)].map((_, i) => (
-                <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
-              ))}
-              <Star className="h-3 w-3 text-gray-300" />
-              <span className="text-xs text-gray-500 ml-1">(245 reviews)</span>
+              {product.rating ? (
+                // If we have a rating, display the appropriate number of filled stars
+                [...Array(5)].map((_, i) => {
+                  const ratingValue = typeof product.rating === 'string' ? 
+                    parseFloat(product.rating) : 
+                    (typeof product.rating === 'number' ? product.rating : 0);
+                  
+                  return (
+                    <Star 
+                      key={i} 
+                      className={`h-3 w-3 ${i < Math.floor(ratingValue) ? 
+                        "fill-amber-400 text-amber-400" : 
+                        (i < ratingValue && i >= Math.floor(ratingValue) ? 
+                          "fill-amber-200 text-amber-200" : 
+                          "text-gray-300")}`} 
+                    />
+                  );
+                })
+              ) : (
+                // If no rating, show empty stars
+                [...Array(5)].map((_, i) => (
+                  <Star key={i} className="h-3 w-3 text-gray-300" />
+                ))
+              )}
+              <span className="text-xs text-gray-500 ml-1">
+                {product.review_count ? 
+                  `(${product.review_count} reviews)` : 
+                  (Array.isArray(product.reviews) && product.reviews.length > 0 ? 
+                    `(${product.reviews.length} reviews)` : 
+                    '(N/A)')}
+              </span>
             </div>
 
             <h2 className="text-base font-bold text-gray-900 line-clamp-2">{product.title}</h2>
@@ -274,10 +404,10 @@ const ProductDetailsPage: React.FC<ProductDetailsPageProps> = ({
             {/* Price and Stock */}
             <div className="mt-3 flex items-center justify-between">
               <div>
-                <div className="text-lg font-bold text-sky-600">{formatPrice(product.price)}</div>
+                <div className="text-lg font-bold text-sky-600">{formatPrice(product.price, product.currency)}</div>
                 {product.target && (
                   <div className="flex items-center text-xs">
-                    <span className="text-gray-500">Target: {formatPrice(product.target)}</span>
+                    <span className="text-gray-500">Target: {formatPrice(product.target, product.currency)}</span>
                   </div>
                 )}
               </div>
@@ -471,161 +601,327 @@ const ProductDetailsPage: React.FC<ProductDetailsPageProps> = ({
                     <p className="text-sm text-gray-600">No similar products found</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {similarProducts.map((similarProduct, index) => (
-                      <Card key={index} className="border shadow-sm hover:shadow-md transition-shadow">
-                        <CardContent className="p-3">
-                          <div className="flex gap-3">
-                            <div className="relative h-20 w-20 bg-gray-50 rounded-md flex items-center justify-center">
-                              <img
-                                src={similarProduct.image || "/placeholder.svg"}
-                                alt={similarProduct.title}
-                                className="object-contain h-full"
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <h3 className="text-xs font-semibold line-clamp-2 mb-1">
-                                {similarProduct.title}
-                              </h3>
-                              <div className="flex items-center gap-1 mb-1">
-                                {[...Array(5)].map((_, i) => (
-                                  <Star
-                                    key={i}
-                                    className={`h-3 w-3 ${i < (similarProduct.rating ? Math.floor(parseFloat(similarProduct.rating)) : 0) ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
-                                  />
-                                ))}
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-semibold text-blue-600">
-                                  {similarProduct.price}
-                                </span>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleExpand(similarProduct.link || '')}
-                            >
-                              {expandedProduct === similarProduct.link ? (
-                                <ChevronUp className="h-4 w-4" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
+                  <>
+                    {/* AI Recommendation Section */}
+                    <div className="mb-6">
+                      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4 border border-indigo-100">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="h-8 w-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center">
+                            <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="currentColor"/>
+                            </svg>
                           </div>
+                          <h3 className="text-sm font-semibold text-gray-900">ShopBot's Choice</h3>
+                          <Badge variant="outline" className="ml-auto bg-white/50 text-indigo-600 border-indigo-200">
+                            AI Powered
+                          </Badge>
+                        </div>
 
-                          {expandedProduct === similarProduct.link && productDetails[similarProduct.link || ''] && (
-                            <div className="mt-3 pt-3 border-t space-y-3">
-                              {/* Description */}
-                              <div>
-                                <h4 className="text-xs font-semibold mb-1">Description</h4>
-                                <p className="text-xs text-gray-700">
-                                  {productDetails[similarProduct.link || '']?.description || 'No description available'}
-                                </p>
-                              </div>
-
-                              {/* Specifications */}
-                              <div>
-                                <h4 className="text-xs font-semibold mb-1">Specifications</h4>
-                                <div className="text-xs text-gray-700 space-y-1">
-                                  {productDetails[similarProduct.link || '']?.brand && (
-                                    <div className="flex justify-between">
-                                      <span>Brand</span>
-                                      <span>{productDetails[similarProduct.link || '']?.brand}</span>
+                        {gptRecommendation ? (
+                        <div className="space-y-3">
+                            <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all cursor-pointer" 
+                                  onClick={() => setIsRecommendationExpanded(!isRecommendationExpanded)}>
+                              <CardContent className="p-3">
+                                <div className="flex gap-3">
+                                  <div className="relative h-20 w-20 bg-white rounded-lg overflow-hidden flex items-center justify-center border border-indigo-100">
+                                    {similarProducts.length > 0 && similarProducts[0].image && (
+                                      <img
+                                        src={similarProducts[0].image || "/placeholder.svg"}
+                                        alt={gptRecommendation.title}
+                                        className="object-contain h-full"
+                                      />
+                                    )}
+                                    <div className="absolute -top-1 -right-1">
+                                      <Badge className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[10px] px-1.5 py-0.5">
+                                        Best Value
+                                      </Badge>
                                     </div>
-                                  )}
-                                  {productDetails[similarProduct.link || '']?.sku && (
-                                    <div className="flex justify-between">
-                                      <span>SKU</span>
-                                      <span>{productDetails[similarProduct.link || '']?.sku}</span>
-                                    </div>
-                                  )}
-                                  {productDetails[similarProduct.link || '']?.rating && (
-                                    <div className="flex justify-between">
-                                      <span>Rating</span>
-                                      <span>{productDetails[similarProduct.link || '']?.rating}</span>
-                                    </div>
-                                  )}
-                                  {productDetails[similarProduct.link || '']?.review_count && (
-                                    <div className="flex justify-between">
-                                      <span>Reviews</span>
-                                      <span>{productDetails[similarProduct.link || '']?.review_count}</span>
-                                    </div>
-                                  )}
-                                  {productDetails[similarProduct.link || '']?.availability && (
-                                    <div className="flex justify-between">
-                                      <span>Stock</span>
-                                      <span className={`font-medium ${
-                                        productDetails[similarProduct.link || '']?.availability.toLowerCase().includes('in stock') 
-                                          ? 'text-green-600' 
-                                          : 'text-red-600'
-                                      }`}>
-                                        {productDetails[similarProduct.link || '']?.availability}
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Reviews */}
-                              {productDetails[similarProduct.link || '']?.reviews && 
-                               Array.isArray(productDetails[similarProduct.link || '']?.reviews) && 
-                               (productDetails[similarProduct.link || '']?.reviews || []).length > 0 && (
-                                <div>
-                                  <h4 className="text-xs font-semibold mb-1">Reviews</h4>
-                                  <div className="space-y-2">
-                                    {(productDetails[similarProduct.link || '']?.reviews || []).map((review, idx) => (
-                                      <div key={idx} className="text-xs text-gray-700">
-                                        <div className="flex items-center gap-1 mb-1">
-                                          <span className="font-medium">{review.username || 'Anonymous'}</span>
-                                          <div className="flex">
-                                            {[...Array(5)].map((_, i) => (
-                                              <Star
-                                                key={i}
-                                                className={`h-3 w-3 ${i < Math.floor(parseFloat(review.rating || '0')) ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
-                                              />
-                                            ))}
-                                          </div>
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1">
+                                        <h4 className="text-sm font-semibold text-gray-900 line-clamp-2">
+                                          {gptRecommendation.title}
+                                        </h4>
+                                        <div className="text-xs text-gray-600 mt-1">
+                                          {gptRecommendation.website}
                                         </div>
-                                        <p className="line-clamp-2">{review.review || 'No review text available'}</p>
                                       </div>
-                                    ))}
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 -mt-1 -mr-1"
+                                      >
+                                        {isRecommendationExpanded ? (
+                                          <ChevronUp className="h-4 w-4" />
+                                        ) : (
+                                          <ChevronDown className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between">
+                                      <div>
+                                        <div className="text-sm font-bold text-indigo-600">
+                                          {gptRecommendation.price}
+                                        </div>
+                                      </div>
+                                      <Button
+                                        className="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white h-8 text-sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const matchedProduct = similarProducts.find(p => 
+                                            p.title?.includes(gptRecommendation.title.substring(0, 30)) || 
+                                            gptRecommendation.title.includes(p.title?.substring(0, 30) || '')
+                                          );
+                                          if (matchedProduct?.link) {
+                                            window.open(matchedProduct.link, '_blank');
+                                          }
+                                        }}
+                                      >
+                                        <ShoppingBag className="h-3.5 w-3.5 mr-1" />
+                                        Buy Now
+                                      </Button>
+                                    </div>
                                   </div>
                                 </div>
-                              )}
+                                
+                                {/* Expandable explanation */}
+                                {isRecommendationExpanded && (
+                                  <div className="mt-3 pt-3 border-t border-indigo-100">
+                                    <h5 className="text-xs font-semibold text-gray-700 mb-1">Why we recommend this:</h5>
+                                    <p className="text-xs text-gray-600">{gptRecommendation.explanation}</p>
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {/* Fallback to first similar product if GPT recommendation is not available */}
+                            {similarProducts.slice(0, 1).map((product, index) => (
+                              <Card key={index} className="border-0 bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all">
+                              <CardContent className="p-3">
+                                <div className="flex gap-3">
+                                  <div className="relative h-20 w-20 bg-white rounded-lg overflow-hidden flex items-center justify-center border border-indigo-100">
+                                    <img
+                                      src={product.image || "/placeholder.svg"}
+                                      alt={product.title}
+                                      className="object-contain h-full"
+                                    />
+                                    <div className="absolute -top-1 -right-1">
+                                      <Badge className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[10px] px-1.5 py-0.5">
+                                        Best Value
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1">
+                                        <h4 className="text-sm font-semibold text-gray-900 line-clamp-2">
+                                          {product.title}
+                                        </h4>
+                                        <div className="flex items-center gap-1 mt-1">
+                                          {[...Array(5)].map((_, i) => (
+                                            <Star
+                                              key={i}
+                                              className={`h-3 w-3 ${i < (product.rating ? Math.floor(parseFloat(product.rating)) : 0) ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
+                                            />
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between">
+                                      <div>
+                                        <div className="text-sm font-bold text-indigo-600">
+                                          {product.price}
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                          Best price among {similarProducts.length} options
+                                        </div>
+                                      </div>
+                                      <Button
+                                        className="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white h-8 text-sm"
+                                        onClick={() => window.open(product.link, '_blank')}
+                                      >
+                                        <ShoppingBag className="h-3.5 w-3.5 mr-1" />
+                                        Buy Now
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                        )}
 
-                              {/* Buy Now Button */}
-                              <div className="mt-4 flex gap-2">
-                                <Button
-                                  className="flex-1 bg-gradient-to-r from-teal-500 to-sky-500 hover:from-teal-600 hover:to-sky-600 h-8 text-sm"
-                                  onClick={() => window.open(similarProduct.link, '_blank')}
-                                >
-                                  <ShoppingBag className="h-3 w-3 mr-1" />
-                                  Buy Now
-                                </Button>
-                                <Button 
-                                  variant="outline" 
-                                  className="flex-1 h-8 text-sm"
-                                  onClick={() => {
-                                    const details = productDetails[similarProduct.link || ''];
-                                    const available = details?.availability?.toLowerCase().includes('in stock') || false;
-                                    setIsAvailable(available);
-                                    setShowAlertModal(true);
-                                    // Store the similar product temporarily to use in handleAlertConfirm
-                                    setTempProduct(similarProduct);
-                                  }}
-                                >
-                                  <Heart className="h-3 w-3 mr-1" />
-                                  Wishlist
-                                </Button>
+                        <div className="mt-3 text-xs text-gray-500 flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-indigo-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M12 16V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M12 8H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          {gptRecommendation ? 'AI-powered analysis based on ratings, reviews, and pricing' : 'Based on price, ratings, and availability analysis'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {similarProducts.map((similarProduct, index) => (
+                        <Card key={index} className="border shadow-sm hover:shadow-md transition-shadow">
+                          <CardContent className="p-3">
+                            <div className="flex gap-3">
+                              <div className="relative h-20 w-20 bg-gray-50 rounded-md flex items-center justify-center">
+                                <img
+                                  src={similarProduct.image || "/placeholder.svg"}
+                                  alt={similarProduct.title}
+                                  className="object-contain h-full"
+                                />
                               </div>
+                              <div className="flex-1">
+                                <h3 className="text-xs font-semibold line-clamp-2 mb-1">
+                                  {similarProduct.title}
+                                </h3>
+                                <div className="flex items-center gap-1 mb-1">
+                                  {[...Array(5)].map((_, i) => (
+                                    <Star
+                                      key={i}
+                                      className={`h-3 w-3 ${i < (similarProduct.rating ? Math.floor(parseFloat(similarProduct.rating)) : 0) ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
+                                    />
+                                  ))}
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-semibold text-blue-600">
+                                    {similarProduct.price}
+                                  </span>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleExpand(similarProduct.link || '')}
+                              >
+                                {expandedProduct === similarProduct.link ? (
+                                  <ChevronUp className="h-4 w-4" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4" />
+                                )}
+                              </Button>
                             </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+
+                            {expandedProduct === similarProduct.link && productDetails[similarProduct.link || ''] && (
+                              <div className="mt-3 pt-3 border-t space-y-3">
+                                {/* Description */}
+                                <div>
+                                  <h4 className="text-xs font-semibold mb-1">Description</h4>
+                                  <p className="text-xs text-gray-700">
+                                    {productDetails[similarProduct.link || '']?.description || 'No description available'}
+                                  </p>
+                                </div>
+
+                                {/* Specifications */}
+                                <div>
+                                  <h4 className="text-xs font-semibold mb-1">Specifications</h4>
+                                  <div className="text-xs text-gray-700 space-y-1">
+                                    {productDetails[similarProduct.link || '']?.brand && (
+                                      <div className="flex justify-between">
+                                        <span>Brand</span>
+                                        <span>{productDetails[similarProduct.link || '']?.brand}</span>
+                                      </div>
+                                    )}
+                                    {productDetails[similarProduct.link || '']?.sku && (
+                                      <div className="flex justify-between">
+                                        <span>SKU</span>
+                                        <span>{productDetails[similarProduct.link || '']?.sku}</span>
+                                      </div>
+                                    )}
+                                    {productDetails[similarProduct.link || '']?.rating && (
+                                      <div className="flex justify-between">
+                                        <span>Rating</span>
+                                        <span>{productDetails[similarProduct.link || '']?.rating}</span>
+                                      </div>
+                                    )}
+                                    {productDetails[similarProduct.link || '']?.review_count && (
+                                      <div className="flex justify-between">
+                                        <span>Reviews</span>
+                                        <span>{productDetails[similarProduct.link || '']?.review_count}</span>
+                                      </div>
+                                    )}
+                                    {productDetails[similarProduct.link || '']?.availability && (
+                                      <div className="flex justify-between">
+                                        <span>Stock</span>
+                                        <span className={`font-medium ${
+                                          productDetails[similarProduct.link || '']?.availability.toLowerCase().includes('in stock') 
+                                            ? 'text-green-600' 
+                                            : 'text-red-600'
+                                        }`}>
+                                          {productDetails[similarProduct.link || '']?.availability}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Reviews */}
+                                {productDetails[similarProduct.link || '']?.reviews && 
+                                 Array.isArray(productDetails[similarProduct.link || '']?.reviews) && 
+                                 (productDetails[similarProduct.link || '']?.reviews || []).length > 0 && (
+                                  <div>
+                                    <h4 className="text-xs font-semibold mb-1">Reviews</h4>
+                                    <div className="space-y-2">
+                                      {(productDetails[similarProduct.link || '']?.reviews || []).map((review, idx) => (
+                                        <div key={idx} className="text-xs text-gray-700">
+                                          <div className="flex items-center gap-1 mb-1">
+                                            <span className="font-medium">{review.username || 'Anonymous'}</span>
+                                            <div className="flex">
+                                              {[...Array(5)].map((_, i) => (
+                                                <Star
+                                                  key={i}
+                                                  className={`h-3 w-3 ${i < Math.floor(parseFloat(review.rating || '0')) ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
+                                                />
+                                              ))}
+                                            </div>
+                                          </div>
+                                          <p className="line-clamp-2">{review.review || 'No review text available'}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Buy Now Button */}
+                                <div className="mt-4 flex gap-2">
+                                  <Button
+                                    className="flex-1 bg-gradient-to-r from-teal-500 to-sky-500 hover:from-teal-600 hover:to-sky-600 h-8 text-sm"
+                                    onClick={() => window.open(similarProduct.link, '_blank')}
+                                  >
+                                    <ShoppingBag className="h-3 w-3 mr-1" />
+                                    Buy Now
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    className="flex-1 h-8 text-sm"
+                                    onClick={() => {
+                                      const details = productDetails[similarProduct.link || ''];
+                                      const available = details?.availability?.toLowerCase().includes('in stock') || false;
+                                      setIsAvailable(available);
+                                      setShowAlertModal(true);
+                                      // Store the similar product temporarily to use in handleAlertConfirm
+                                      setTempProduct(similarProduct);
+                                    }}
+                                  >
+                                    <Heart className="h-3 w-3 mr-1" />
+                                    Wishlist
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </>
                 )}
               </TabsContent>
             </Tabs>

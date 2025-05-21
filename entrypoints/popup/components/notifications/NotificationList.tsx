@@ -21,7 +21,7 @@ const NotificationList: React.FC<NotificationListProps> = ({
   onNotificationClick,
 }) => {
   return (
-    <ScrollArea className="h-[calc(100vh-180px)]">
+    <ScrollArea className="flex-1">
       <div className="divide-y divide-gray-100">
         {notifications.map((notification) => (
           <NotificationItem

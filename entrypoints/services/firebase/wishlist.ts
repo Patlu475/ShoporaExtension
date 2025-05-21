@@ -26,6 +26,7 @@ export interface Product {
   dateAdded?: number;
   url?: string;
   target?: string | null; // Add target field for alert preferences
+  targetMet?: boolean; // Add field to track if target has been met
 }
 
 /**
@@ -63,7 +64,8 @@ export class WishlistService {
       const productWithId = {
         ...product,
         id: productId,
-        dateAdded: Date.now()
+        dateAdded: Date.now(),
+        targetMet: false // Initialize targetMet as false
       };
       
       // Create a document with a specific ID in the collection
@@ -236,6 +238,12 @@ export class WishlistService {
       
       // Check each product
       for (const product of products) {
+        // First check: Only process products that haven't met their target yet
+        if (product.targetMet) {
+          console.log(`Skipping ${product.title} - target already met`);
+          continue;
+        }
+
         const target = product.target || '';
         
         try {
@@ -259,8 +267,9 @@ export class WishlistService {
               
               console.log(`Comparing prices: current=${currentPrice}, target=${targetPrice}`);
               
-              // If the current price is at or below the target price, create a notification
+              // Second check: Check if target price is reached
               if (!isNaN(targetPrice) && !isNaN(currentPrice) && currentPrice <= targetPrice) {
+                // Create notification
                 await notificationService.createNotification({
                   userId,
                   productId: product.id || 'unknown',
@@ -274,6 +283,14 @@ export class WishlistService {
                 });
                 notificationCreated = true;
                 console.log(`Created price alert notification for ${product.title}`);
+
+                // Set targetMet to true after notification is created
+                if (product.id && db) {
+                  await updateDoc(doc(db, this.collectionName, product.id), {
+                    'product.targetMet': true
+                  });
+                  console.log(`Marked ${product.title} as target met`);
+                }
               }
             }
           } 
@@ -283,6 +300,7 @@ export class WishlistService {
             
             if (product.availability) {
               const availabilityLower = product.availability.toLowerCase();
+              // Second check: Check if availability target is reached
               if (availabilityLower.includes('in stock') || availabilityLower.includes('available')) {
                 await notificationService.createNotification({
                   userId,
@@ -297,6 +315,14 @@ export class WishlistService {
                 });
                 notificationCreated = true;
                 console.log(`Created availability notification for ${product.title}`);
+
+                // Set targetMet to true after notification is created
+                if (product.id && db) {
+                  await updateDoc(doc(db, this.collectionName, product.id), {
+                    'product.targetMet': true
+                  });
+                  console.log(`Marked ${product.title} as target met`);
+                }
               }
             }
           }
@@ -319,7 +345,7 @@ export class WishlistService {
         }
       }
     } catch (error) {
-      console.error('Error in manual notification check:', error);
+      console.error('Error in manuallyCheckAndCreateNotifications:', error);
     }
   }
 }
